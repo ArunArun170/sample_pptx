@@ -2,9 +2,9 @@ name: Daily Birthday Poster Automation
 
 on:
   schedule:
-    # 18:30 UTC = 12:00 AM IST (தினமும் நள்ளிரவு 12:00 மணி)
+    # 18:30 UTC = 12:00 AM IST (dhinamum midnight 12:00 மணி)
     - cron: '30 18 * * *'
-  workflow_dispatch: # மேனுவலாக Run செய்து பார்க்க உதவும் பட்டன்
+  workflow_dispatch:
 
 jobs:
   run-birthday-bot:
@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Check repository code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
