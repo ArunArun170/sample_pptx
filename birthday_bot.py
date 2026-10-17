@@ -55,11 +55,13 @@ def main():
         print(f"❌ Error: Google Sheet-இல் 'DOB' Column இல்லை. தற்போதைய Columns: {list(df.columns)}")
         raise ValueError("DOB column missing")
 
-    # Format=mixed மூலம் எந்த Date format ஆக இருந்தாலும் சரியாக Convert செய்யும்
     df['Parsed_DOB'] = pd.to_datetime(df['DOB'], format='mixed', errors='coerce')
 
-    today = datetime.datetime.now()
-    print(f"📅 Server Today Date: {today.strftime('%Y-%m-%d')}")
+    # 🇮🇳 Indian Standard Time (IST = UTC + 5:30)
+    ist_timezone = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    today = datetime.datetime.now(ist_timezone)
+    
+    print(f"📅 IST Today Date: {today.strftime('%Y-%m-%d')}")
     print("📊 Sheet Data Read Summary:")
     for _, r in df.iterrows():
         print(f"   - {r.get('Name')}: Original DOB = '{r.get('DOB')}' -> Parsed = '{r.get('Parsed_DOB')}'")
