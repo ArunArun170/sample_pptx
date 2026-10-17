@@ -46,23 +46,27 @@ def main():
     
     try:
         df = pd.read_csv(SHEET_URL)
-        # Column பெயர்களில் உள்ள தேவையில்லாத Space-களை நீக்குதல்
         df.columns = df.columns.str.strip()
     except Exception as e:
         print(f"❌ Google Sheet Data Load Error: {e}")
-        return
+        raise e
 
-    # DOB Column-ஐ வாசித்தல்
     if 'DOB' not in df.columns:
         print(f"❌ Error: Google Sheet-இல் 'DOB' Column இல்லை. தற்போதைய Columns: {list(df.columns)}")
-        return
+        raise ValueError("DOB column missing")
 
-    df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
+    # Format=mixed மூலம் எந்த Date format ஆக இருந்தாலும் சரியாக Convert செய்யும்
+    df['Parsed_DOB'] = pd.to_datetime(df['DOB'], format='mixed', errors='coerce')
+
     today = datetime.datetime.now()
+    print(f"📅 Server Today Date: {today.strftime('%Y-%m-%d')}")
+    print("📊 Sheet Data Read Summary:")
+    for _, r in df.iterrows():
+        print(f"   - {r.get('Name')}: Original DOB = '{r.get('DOB')}' -> Parsed = '{r.get('Parsed_DOB')}'")
 
     birthday_list = df[
-        (df['DOB'].dt.month == today.month) & 
-        (df['DOB'].dt.day == today.day)
+        (df['Parsed_DOB'].dt.month == today.month) & 
+        (df['Parsed_DOB'].dt.day == today.day)
     ]
 
     if birthday_list.empty:
@@ -72,8 +76,8 @@ def main():
     for _, row in birthday_list.iterrows():
         name = row.get('Name', 'Employee')
         emp_id = row.get('EmpID', 'N/A')
-        desig = row.get('Designation', 'Team Member')
-        phone = row.get('Phone', 'N/A')
+        desig = row.get('Designation', row.get('Department', 'Team Member'))
+        phone = row.get('Phone', row.get('Phone No.', 'N/A'))
 
         print(f"🎉 {name} -க்கு பிறந்தநாள் Poster உருவாக்கப்படுகிறது...")
         poster_file = create_birthday_poster_image(name, emp_id, desig)
@@ -86,14 +90,12 @@ def main():
             f"📞 *Phone:* {phone}"
         )
         
-        try:
-            res = send_whatsapp_media(poster_file, caption)
-            if res.status_code == 200:
-                print(f"✅ Success! {name} -க்கு WhatsApp Poster அனுப்பப்பட்டது.")
-            else:
-                print(f"❌ Failed Status ({res.status_code}): {res.text}")
-        except Exception as e:
-            print(f"❌ Error: {e}")
+        res = send_whatsapp_media(poster_file, caption)
+        if res.status_code == 200:
+            print(f"✅ Success! {name} -க்கு WhatsApp Poster அனுப்பப்பட்டது.")
+        else:
+            print(f"❌ Failed Status ({res.status_code}): {res.text}")
+            raise Exception(f"Green API Error: {res.status_code} - {res.text}")
 
 if __name__ == "__main__":
     main()
