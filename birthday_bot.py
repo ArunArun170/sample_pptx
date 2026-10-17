@@ -24,8 +24,8 @@ def create_birthday_poster_image(emp_name, emp_id, designation, output_path="bir
     img.save(output_path, quality=95)
     return output_path
 
-# 2. Green API Config
-MEDIA_URL = os.environ.get("GREEN_API_MEDIA_URL", "https://7107.media.greenapi.com")
+# 2. Green API Config (Dashboard-இல் உள்ள சரியான apiUrl)
+MEDIA_URL = os.environ.get("GREEN_API_MEDIA_URL", "https://7107.api.greenapi.com")
 INSTANCE_ID = os.environ.get("GREEN_API_INSTANCE_ID", "710722767657")
 API_TOKEN = os.environ.get("GREEN_API_TOKEN", "89abe524e02344fbb6a2f75e1f8e8cc3f6cef40b430940aab7")
 TARGET_WHATSAPP = os.environ.get("TARGET_WHATSAPP_NUMBER", "916374708386@c.us")
