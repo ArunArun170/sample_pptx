@@ -1,8 +1,8 @@
 import datetime
 import os
-import requests
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
+from whatsapp_api_client_python import API
 
 # 1. Direct JPG Poster Image Creating Function
 def create_birthday_poster_image(emp_name, emp_id, designation, output_path="birthday_poster.jpg"):
@@ -24,27 +24,22 @@ def create_birthday_poster_image(emp_name, emp_id, designation, output_path="bir
     img.save(output_path, quality=95)
     return output_path
 
-# 2. Main Function
+# 2. Main Function using Official Green API SDK
 def main():
-    session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*'
-    })
-
-    api_host = "https://api.greenapi.com"
     instance_id = os.environ.get("GREEN_API_INSTANCE_ID", "710722767657").strip()
     api_token = os.environ.get("GREEN_API_TOKEN", "89abe524e02344fbb6a2f75e1f8e8cc3f6cef40b430940aab7").strip()
     target_whatsapp = os.environ.get("TARGET_WHATSAPP_NUMBER", "916374708386@c.us").strip()
 
-    # Instance state check
-    state_url = f"{api_host}/waInstance{instance_id}/getStateInstance/{api_token}"
+    # Green API Official SDK Initialise
+    greenAPI = API.GreenAPI(instance_id, api_token)
+
+    # Check Instance status
     try:
-        st_res = session.get(state_url, timeout=20)
-        print(f"📡 Green API State Status Code: {st_res.status_code}")
-        print(f"📡 Green API State Text: {st_res.text[:200]}")
+        state_res = greenAPI.account.getStateInstance()
+        print(f"📡 Green API State Response Code: {state_res.code}")
+        print(f"📡 Green API State Data: {state_res.data}")
     except Exception as e:
-        print(f"⚠️ State Check Error: {e}")
+        print(f"⚠️ State check warning: {e}")
 
     spreadsheet_id = os.environ.get("GOOGLE_SHEET_ID", "1kHnIgB05VDsJ-XqFdFtHkJkGG6_TUcx5wlbbk4XZgBk").strip()
     sheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv"
@@ -58,6 +53,7 @@ def main():
 
     df['Parsed_DOB'] = pd.to_datetime(df['DOB'], format='mixed', errors='coerce')
 
+    # Indian Standard Time (IST = UTC + 5:30)
     ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
     today = datetime.datetime.now(ist_tz)
     print(f"📅 Today Date (IST): {today.strftime('%Y-%m-%d')}")
@@ -89,26 +85,28 @@ def main():
             f"📞 *Phone:* {phone}"
         )
         
-        send_url = f"{api_host}/waInstance{instance_id}/sendFileByUpload/{api_token}"
-        payload = {'chatId': target_whatsapp, 'caption': caption}
-        
         print(f"🚀 Sending poster to {target_whatsapp}...")
         try:
-            with open(poster_file, 'rb') as f:
-                files = {'file': ('birthday_poster.jpg', f, 'image/jpeg')}
-                res = session.post(send_url, data=payload, files=files, timeout=30)
-                print(f"📩 Send Status Code: {res.status_code}")
-                print(f"📩 Send Response Body: {res.text[:300]}")
-                if res.status_code == 200:
-                    print(f"✅ Success! Poster sent to {name}.")
-                    success_count += 1
-                else:
-                    print(f"❌ API Response Failed with Status: {res.status_code}")
+            # SDK Official Method
+            res = greenAPI.sending.sendFileByUpload(
+                chatId=target_whatsapp,
+                path=poster_file,
+                fileName="birthday_poster.jpg",
+                caption=caption
+            )
+            print(f"📩 Green API SDK Code: {res.code}")
+            print(f"📩 Green API SDK Data: {res.data}")
+
+            if res.code == 200:
+                print(f"✅ Success! Poster sent to {name}.")
+                success_count += 1
+            else:
+                print(f"❌ SDK Send Failed with Code: {res.code}")
         except Exception as e:
             print(f"❌ Exception sending media: {e}")
 
     if success_count == 0:
-        raise Exception("Green API deliverability test failed. Check Instance ID/Token state.")
+        raise Exception("Green API deliverability test failed. Check Green API Console QR connection.")
 
 if __name__ == "__main__":
     main()
