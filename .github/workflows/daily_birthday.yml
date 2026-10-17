@@ -2,12 +2,9 @@ name: Daily Birthday Poster Automation
 
 on:
   schedule:
-    # 18:30 UTC = 12:00 AM IST (dhinamum midnight 12:00 மணி)
+    # 18:30 UTC = 12:00 AM IST (தினமும் நள்ளிரவு 12:00 மணி)
     - cron: '30 18 * * *'
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   run-birthday-bot:
@@ -34,6 +31,3 @@ jobs:
           TARGET_WHATSAPP_NUMBER: ${{ secrets.TARGET_WHATSAPP_NUMBER }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
         run: python birthday_bot.py
-
-      - name: Keepalive Workflow
-        uses: gautamkrishnar/keepalive-workflow@v1
