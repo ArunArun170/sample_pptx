@@ -30,40 +30,21 @@ INSTANCE_ID = os.environ.get("GREEN_API_INSTANCE_ID", "710722767657").strip()
 API_TOKEN = os.environ.get("GREEN_API_TOKEN", "89abe524e02344fbb6a2f75e1f8e8cc3f6cef40b430940aab7").strip()
 TARGET_WHATSAPP = os.environ.get("TARGET_WHATSAPP_NUMBER", "916374708386@c.us").strip()
 
-def check_green_api_state():
-    """Green API Instance Active-ah irukkaa-nu Check panna"""
-    url = f"{API_HOST}/waInstance{INSTANCE_ID}/getStateInstance/{API_TOKEN}"
-    try:
-        res = requests.get(url, timeout=15)
-        print(f"📡 Green API Instance State Response: {res.status_code} - {res.text}")
-        return res.json().get("stateInstance")
-    except Exception as e:
-        print(f"⚠️ Green API State Check Failed: {e}")
-        return None
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+}
 
 def send_whatsapp_media(file_path, caption):
-    """Green API via Media Poster Send"""
     url = f"{API_HOST}/waInstance{INSTANCE_ID}/sendFileByUpload/{API_TOKEN}"
     payload = {'chatId': TARGET_WHATSAPP, 'caption': caption}
     
     with open(file_path, 'rb') as f:
         files = {'file': ('birthday_poster.jpg', f, 'image/jpeg')}
-        response = requests.post(url, data=payload, files=files, timeout=30)
+        response = requests.post(url, headers=HEADERS, data=payload, files=files, timeout=30)
     return response
-
-def send_whatsapp_text(message):
-    """Media fail aanaal Fallback Text Message Send"""
-    url = f"{API_HOST}/waInstance{INSTANCE_ID}/sendMessage/{API_TOKEN}"
-    payload = {'chatId': TARGET_WHATSAPP, 'message': message}
-    return requests.post(url, json=payload, timeout=30)
 
 # 3. Main Function
 def main():
-    # Green API QR Code / Auth Check
-    state = check_green_api_state()
-    if state != "authorized":
-        print(f"⚠️ Warning: Green API State is '{state}'. Dashboard-la QR code connected-ah irukkaa-nu check pannunga.")
-
     SPREADSHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "1kHnIgB05VDsJ-XqFdFtHkJkGG6_TUcx5wlbbk4XZgBk").strip()
     SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv"
     
@@ -73,10 +54,6 @@ def main():
     except Exception as e:
         print(f"❌ Google Sheet Load Error: {e}")
         raise e
-
-    if 'DOB' not in df.columns:
-        print(f"❌ Error: 'DOB' column missing. Columns: {list(df.columns)}")
-        raise ValueError("DOB column missing")
 
     df['Parsed_DOB'] = pd.to_datetime(df['DOB'], format='mixed', errors='coerce')
 
@@ -115,16 +92,12 @@ def main():
         print(f"🚀 Sending WhatsApp poster to {TARGET_WHATSAPP}...")
         res = send_whatsapp_media(poster_file, caption)
         print(f"📩 Green API Response Status: {res.status_code}")
-        print(f"📩 Green API Response Text: {res.text}")
-
+        
         if res.status_code == 200:
             print(f"✅ Success! Poster sent to {name}.")
         else:
-            print(f"⚠️ Media send status {res.status_code}. Trying text message fallback...")
-            text_res = send_whatsapp_text(caption)
-            print(f"📩 Fallback Text Response: {text_res.status_code} - {text_res.text}")
-            if text_res.status_code != 200:
-                raise Exception(f"Green API Error: {res.status_code} - {res.text}")
+            print(f"❌ Failed Response: {res.text}")
+            raise Exception(f"Green API Error: {res.status_code}")
 
 if __name__ == "__main__":
     main()
