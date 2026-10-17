@@ -24,19 +24,32 @@ def create_birthday_poster_image(emp_name, emp_id, designation, output_path="bir
     img.save(output_path, quality=95)
     return output_path
 
-# 2. Green API Config (Dashboard-இல் உள்ள சரியான apiUrl)
-MEDIA_URL = os.environ.get("GREEN_API_MEDIA_URL", "https://7107.api.greenapi.com")
+# 2. Green API Config (Correct Official Host)
+API_URL = os.environ.get("GREEN_API_URL", "https://api.greenapi.com")
 INSTANCE_ID = os.environ.get("GREEN_API_INSTANCE_ID", "710722767657")
 API_TOKEN = os.environ.get("GREEN_API_TOKEN", "89abe524e02344fbb6a2f75e1f8e8cc3f6cef40b430940aab7")
 TARGET_WHATSAPP = os.environ.get("TARGET_WHATSAPP_NUMBER", "916374708386@c.us")
 
 def send_whatsapp_media(file_path, caption):
-    url = f"{MEDIA_URL}/waInstance{INSTANCE_ID}/sendFileByUpload/{API_TOKEN}"
+    # api.greenapi.com மற்றும் media.greenapi.com ஆகிய இரண்டையும் Try செய்ய ஏற்பாடு
+    endpoints = [
+        f"{API_URL}/waInstance{INSTANCE_ID}/sendFileByUpload/{API_TOKEN}",
+        f"https://media.greenapi.com/waInstance{INSTANCE_ID}/sendFileByUpload/{API_TOKEN}"
+    ]
+    
     payload = {'chatId': TARGET_WHATSAPP, 'caption': caption}
     
-    with open(file_path, 'rb') as f:
-        files = [('file', (os.path.basename(file_path), f, 'image/jpeg'))]
-        response = requests.post(url, data=payload, files=files, timeout=30)
+    for url in endpoints:
+        try:
+            with open(file_path, 'rb') as f:
+                files = [('file', (os.path.basename(file_path), f, 'image/jpeg'))]
+                response = requests.post(url, data=payload, files=files, timeout=30)
+                if response.status_code == 200:
+                    return response
+        except Exception as e:
+            print(f"⚠️ Endpoint {url} Error: {e}")
+            continue
+            
     return response
 
 # 3. Main Function
