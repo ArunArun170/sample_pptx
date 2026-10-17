@@ -24,60 +24,67 @@ def create_birthday_poster_image(emp_name, emp_id, designation, output_path="bir
     img.save(output_path, quality=95)
     return output_path
 
-# 2. Green API Config (Correct Official Host)
-API_URL = os.environ.get("GREEN_API_URL", "https://api.greenapi.com")
-INSTANCE_ID = os.environ.get("GREEN_API_INSTANCE_ID", "710722767657")
-API_TOKEN = os.environ.get("GREEN_API_TOKEN", "89abe524e02344fbb6a2f75e1f8e8cc3f6cef40b430940aab7")
-TARGET_WHATSAPP = os.environ.get("TARGET_WHATSAPP_NUMBER", "916374708386@c.us")
+# 2. Green API Config
+API_HOST = "https://api.greenapi.com"
+INSTANCE_ID = os.environ.get("GREEN_API_INSTANCE_ID", "710722767657").strip()
+API_TOKEN = os.environ.get("GREEN_API_TOKEN", "89abe524e02344fbb6a2f75e1f8e8cc3f6cef40b430940aab7").strip()
+TARGET_WHATSAPP = os.environ.get("TARGET_WHATSAPP_NUMBER", "916374708386@c.us").strip()
+
+def check_green_api_state():
+    """Green API Instance Active-ah irukkaa-nu Check panna"""
+    url = f"{API_HOST}/waInstance{INSTANCE_ID}/getStateInstance/{API_TOKEN}"
+    try:
+        res = requests.get(url, timeout=15)
+        print(f"📡 Green API Instance State Response: {res.status_code} - {res.text}")
+        return res.json().get("stateInstance")
+    except Exception as e:
+        print(f"⚠️ Green API State Check Failed: {e}")
+        return None
 
 def send_whatsapp_media(file_path, caption):
-    # api.greenapi.com மற்றும் media.greenapi.com ஆகிய இரண்டையும் Try செய்ய ஏற்பாடு
-    endpoints = [
-        f"{API_URL}/waInstance{INSTANCE_ID}/sendFileByUpload/{API_TOKEN}",
-        f"https://media.greenapi.com/waInstance{INSTANCE_ID}/sendFileByUpload/{API_TOKEN}"
-    ]
-    
+    """Green API via Media Poster Send"""
+    url = f"{API_HOST}/waInstance{INSTANCE_ID}/sendFileByUpload/{API_TOKEN}"
     payload = {'chatId': TARGET_WHATSAPP, 'caption': caption}
     
-    for url in endpoints:
-        try:
-            with open(file_path, 'rb') as f:
-                files = [('file', (os.path.basename(file_path), f, 'image/jpeg'))]
-                response = requests.post(url, data=payload, files=files, timeout=30)
-                if response.status_code == 200:
-                    return response
-        except Exception as e:
-            print(f"⚠️ Endpoint {url} Error: {e}")
-            continue
-            
+    with open(file_path, 'rb') as f:
+        files = {'file': ('birthday_poster.jpg', f, 'image/jpeg')}
+        response = requests.post(url, data=payload, files=files, timeout=30)
     return response
+
+def send_whatsapp_text(message):
+    """Media fail aanaal Fallback Text Message Send"""
+    url = f"{API_HOST}/waInstance{INSTANCE_ID}/sendMessage/{API_TOKEN}"
+    payload = {'chatId': TARGET_WHATSAPP, 'message': message}
+    return requests.post(url, json=payload, timeout=30)
 
 # 3. Main Function
 def main():
-    SPREADSHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "1kHnIgB05VDsJ-XqFdFtHkJkGG6_TUcx5wlbbk4XZgBk")
+    # Green API QR Code / Auth Check
+    state = check_green_api_state()
+    if state != "authorized":
+        print(f"⚠️ Warning: Green API State is '{state}'. Dashboard-la QR code connected-ah irukkaa-nu check pannunga.")
+
+    SPREADSHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "1kHnIgB05VDsJ-XqFdFtHkJkGG6_TUcx5wlbbk4XZgBk").strip()
     SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv"
     
     try:
         df = pd.read_csv(SHEET_URL)
         df.columns = df.columns.str.strip()
     except Exception as e:
-        print(f"❌ Google Sheet Data Load Error: {e}")
+        print(f"❌ Google Sheet Load Error: {e}")
         raise e
 
     if 'DOB' not in df.columns:
-        print(f"❌ Error: Google Sheet-இல் 'DOB' Column இல்லை. தற்போதைய Columns: {list(df.columns)}")
+        print(f"❌ Error: 'DOB' column missing. Columns: {list(df.columns)}")
         raise ValueError("DOB column missing")
 
     df['Parsed_DOB'] = pd.to_datetime(df['DOB'], format='mixed', errors='coerce')
 
-    # 🇮🇳 Indian Standard Time (IST = UTC + 5:30)
-    ist_timezone = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
-    today = datetime.datetime.now(ist_timezone)
+    # Indian Standard Time (IST = UTC + 5:30)
+    ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    today = datetime.datetime.now(ist_tz)
     
-    print(f"📅 IST Today Date: {today.strftime('%Y-%m-%d')}")
-    print("📊 Sheet Data Read Summary:")
-    for _, r in df.iterrows():
-        print(f"   - {r.get('Name')}: Original DOB = '{r.get('DOB')}' -> Parsed = '{r.get('Parsed_DOB')}'")
+    print(f"📅 Today Date (IST): {today.strftime('%Y-%m-%d')}")
 
     birthday_list = df[
         (df['Parsed_DOB'].dt.month == today.month) & 
@@ -85,7 +92,7 @@ def main():
     ]
 
     if birthday_list.empty:
-        print("ℹ️ இன்று பிறந்தநாள் கொண்டாடும் பணியாளர்கள் எவரும் இல்லை.")
+        print("ℹ️ Indru pirandhanaal kondadum paniyalaragal evarum illai.")
         return
 
     for _, row in birthday_list.iterrows():
@@ -94,7 +101,7 @@ def main():
         desig = row.get('Designation', row.get('Department', 'Team Member'))
         phone = row.get('Phone', row.get('Phone No.', 'N/A'))
 
-        print(f"🎉 {name} -க்கு பிறந்தநாள் Poster உருவாக்கப்படுகிறது...")
+        print(f"🎉 Creating poster for {name}...")
         poster_file = create_birthday_poster_image(name, emp_id, desig)
         
         caption = (
@@ -105,12 +112,19 @@ def main():
             f"📞 *Phone:* {phone}"
         )
         
+        print(f"🚀 Sending WhatsApp poster to {TARGET_WHATSAPP}...")
         res = send_whatsapp_media(poster_file, caption)
+        print(f"📩 Green API Response Status: {res.status_code}")
+        print(f"📩 Green API Response Text: {res.text}")
+
         if res.status_code == 200:
-            print(f"✅ Success! {name} -க்கு WhatsApp Poster அனுப்பப்பட்டது.")
+            print(f"✅ Success! Poster sent to {name}.")
         else:
-            print(f"❌ Failed Status ({res.status_code}): {res.text}")
-            raise Exception(f"Green API Error: {res.status_code} - {res.text}")
+            print(f"⚠️ Media send status {res.status_code}. Trying text message fallback...")
+            text_res = send_whatsapp_text(caption)
+            print(f"📩 Fallback Text Response: {text_res.status_code} - {text_res.text}")
+            if text_res.status_code != 200:
+                raise Exception(f"Green API Error: {res.status_code} - {res.text}")
 
 if __name__ == "__main__":
     main()
