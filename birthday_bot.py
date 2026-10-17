@@ -1,8 +1,8 @@
 import datetime
 import os
+import requests
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
-from whatsapp_api_client_python import API
 
 # 1. Direct JPG Poster Image Creating Function
 def create_birthday_poster_image(emp_name, emp_id, designation, output_path="birthday_poster.jpg"):
@@ -24,36 +24,44 @@ def create_birthday_poster_image(emp_name, emp_id, designation, output_path="bir
     img.save(output_path, quality=95)
     return output_path
 
-# 2. Main Function using Official Green API SDK
+# 2. Localhost-இல் வேலை செய்த Server URL & 'or' Logic
+MEDIA_URL = "https://7107.api.greenapi.com"
+
+# GitHub Secrets empty-ஆக இருந்தால் தானாக Default Value-ஐ எடுக்கும் 'or' Logic:
+INSTANCE_ID = (os.environ.get("GREEN_API_INSTANCE_ID") or "710722767657").strip()
+API_TOKEN = (os.environ.get("GREEN_API_TOKEN") or "89abe524e02344fbb6a2f75e1f8e8cc3f6cef40b430940aab7").strip()
+TARGET_WHATSAPP = (os.environ.get("TARGET_WHATSAPP_NUMBER") or "916374708386@c.us").strip()
+
+def send_whatsapp_media(file_path, caption):
+    url = f"{MEDIA_URL}/waInstance{INSTANCE_ID}/sendFileByUpload/{API_TOKEN}"
+    payload = {'chatId': TARGET_WHATSAPP, 'caption': caption}
+    
+    print(f"📡 Sending request to Green API...")
+    
+    with open(file_path, 'rb') as f:
+        files = [('file', (os.path.basename(file_path), f, 'image/jpeg'))]
+        response = requests.post(url, data=payload, files=files, timeout=30)
+    return response
+
+# 3. Main Function
 def main():
-    instance_id = os.environ.get("GREEN_API_INSTANCE_ID", "710722767657").strip()
-    api_token = os.environ.get("GREEN_API_TOKEN", "89abe524e02344fbb6a2f75e1f8e8cc3f6cef40b430940aab7").strip()
-    target_whatsapp = os.environ.get("TARGET_WHATSAPP_NUMBER", "916374708386@c.us").strip()
-
-    # Green API Official SDK Initialise
-    greenAPI = API.GreenAPI(instance_id, api_token)
-
-    # Check Instance status
-    try:
-        state_res = greenAPI.account.getStateInstance()
-        print(f"📡 Green API State Response Code: {state_res.code}")
-        print(f"📡 Green API State Data: {state_res.data}")
-    except Exception as e:
-        print(f"⚠️ State check warning: {e}")
-
-    spreadsheet_id = os.environ.get("GOOGLE_SHEET_ID", "1kHnIgB05VDsJ-XqFdFtHkJkGG6_TUcx5wlbbk4XZgBk").strip()
-    sheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv"
+    SPREADSHEET_ID = (os.environ.get("GOOGLE_SHEET_ID") or "1kHnIgB05VDsJ-XqFdFtHkJkGG6_TUcx5wlbbk4XZgBk").strip()
+    SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv"
     
     try:
-        df = pd.read_csv(sheet_url)
+        df = pd.read_csv(SHEET_URL)
         df.columns = df.columns.str.strip()
     except Exception as e:
-        print(f"❌ Google Sheet Load Error: {e}")
+        print(f"❌ Google Sheet Read Error: {e}")
         raise e
+
+    if 'DOB' not in df.columns:
+        print(f"❌ Error: 'DOB' column missing.")
+        raise ValueError("DOB column missing")
 
     df['Parsed_DOB'] = pd.to_datetime(df['DOB'], format='mixed', errors='coerce')
 
-    # Indian Standard Time (IST = UTC + 5:30)
+    # Indian Timezone (IST)
     ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
     today = datetime.datetime.now(ist_tz)
     print(f"📅 Today Date (IST): {today.strftime('%Y-%m-%d')}")
@@ -64,10 +72,9 @@ def main():
     ]
 
     if birthday_list.empty:
-        print("ℹ️ Indru pirandhanaal kondadum paniyalaragal evarum illai.")
+        print("ℹ️ இன்று பிறந்தநாள் கொண்டாடும் பணியாளர்கள் எவரும் இல்லை.")
         return
 
-    success_count = 0
     for _, row in birthday_list.iterrows():
         name = row.get('Name', 'Employee')
         emp_id = row.get('EmpID', 'N/A')
@@ -85,28 +92,15 @@ def main():
             f"📞 *Phone:* {phone}"
         )
         
-        print(f"🚀 Sending poster to {target_whatsapp}...")
-        try:
-            # SDK Official Method
-            res = greenAPI.sending.sendFileByUpload(
-                chatId=target_whatsapp,
-                path=poster_file,
-                fileName="birthday_poster.jpg",
-                caption=caption
-            )
-            print(f"📩 Green API SDK Code: {res.code}")
-            print(f"📩 Green API SDK Data: {res.data}")
-
-            if res.code == 200:
-                print(f"✅ Success! Poster sent to {name}.")
-                success_count += 1
-            else:
-                print(f"❌ SDK Send Failed with Code: {res.code}")
-        except Exception as e:
-            print(f"❌ Exception sending media: {e}")
-
-    if success_count == 0:
-        raise Exception("Green API deliverability test failed. Check Green API Console QR connection.")
+        print(f"🚀 Sending Poster to WhatsApp...")
+        res = send_whatsapp_media(poster_file, caption)
+        print(f"📩 Green API Status Code: {res.status_code}")
+        
+        if res.status_code == 200:
+            print(f"✅ Success! Poster sent to {name}.")
+        else:
+            print(f"❌ Green API Error ({res.status_code}): {res.text}")
+            raise Exception(f"Green API Error: {res.status_code}")
 
 if __name__ == "__main__":
     main()
