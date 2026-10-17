@@ -6,11 +6,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 # 1. Direct JPG Poster Image Creating Function
 def create_birthday_poster_image(emp_name, emp_id, designation, output_path="birthday_poster.jpg"):
-    # 1000x1000 Square Poster Image
     img = Image.new('RGB', (1000, 1000), color=(15, 32, 67)) # Dark Blue Background
     draw = ImageDraw.Draw(img)
     
-    # Text Fonts
     try:
         font_title = ImageFont.truetype("arial.ttf", 55)
         font_name = ImageFont.truetype("arial.ttf", 50)
@@ -18,7 +16,6 @@ def create_birthday_poster_image(emp_name, emp_id, designation, output_path="bir
     except Exception:
         font_title = font_name = font_text = ImageFont.load_default()
 
-    # Poster Content
     draw.text((500, 150), "🎉 HAPPY BIRTHDAY! 🎉", fill=(255, 215, 0), font=font_title, anchor="mm")
     draw.text((500, 350), f"{emp_name}", fill=(255, 255, 255), font=font_name, anchor="mm")
     draw.text((500, 500), f"Role: {designation}  |  Emp ID: {emp_id}", fill=(200, 200, 200), font=font_text, anchor="mm")
@@ -27,7 +24,7 @@ def create_birthday_poster_image(emp_name, emp_id, designation, output_path="bir
     img.save(output_path, quality=95)
     return output_path
 
-# 2. Green API Config (File upload-ku media.greenapi.com thaan use pannanum)
+# 2. Green API Config
 MEDIA_URL = os.environ.get("GREEN_API_MEDIA_URL", "https://7107.media.greenapi.com")
 INSTANCE_ID = os.environ.get("GREEN_API_INSTANCE_ID", "710722767657")
 API_TOKEN = os.environ.get("GREEN_API_TOKEN", "89abe524e02344fbb6a2f75e1f8e8cc3f6cef40b430940aab7")
@@ -44,17 +41,23 @@ def send_whatsapp_media(file_path, caption):
 
 # 3. Main Function
 def main():
-    # Google Sheet ID
     SPREADSHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "1kHnIgB05VDsJ-XqFdFtHkJkGG6_TUcx5wlbbk4XZgBk")
     SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv"
     
     try:
         df = pd.read_csv(SHEET_URL)
+        # Column பெயர்களில் உள்ள தேவையில்லாத Space-களை நீக்குதல்
+        df.columns = df.columns.str.strip()
     except Exception as e:
         print(f"❌ Google Sheet Data Load Error: {e}")
         return
 
-    df['DOB'] = pd.to_datetime(df['DOB'])
+    # DOB Column-ஐ வாசித்தல்
+    if 'DOB' not in df.columns:
+        print(f"❌ Error: Google Sheet-இல் 'DOB' Column இல்லை. தற்போதைய Columns: {list(df.columns)}")
+        return
+
+    df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
     today = datetime.datetime.now()
 
     birthday_list = df[
@@ -63,25 +66,30 @@ def main():
     ]
 
     if birthday_list.empty:
-        print("ℹ️ Indru pirandhanaal kondadum paniyalaragal evarum illai.")
+        print("ℹ️ இன்று பிறந்தநாள் கொண்டாடும் பணியாளர்கள் எவரும் இல்லை.")
         return
 
     for _, row in birthday_list.iterrows():
-        print(f"🎉 {row['Name']} -ukku Birthday JPG Poster uruvakkapadugiradhu...")
-        poster_file = create_birthday_poster_image(row['Name'], row['EmpID'], row['Designation'])
+        name = row.get('Name', 'Employee')
+        emp_id = row.get('EmpID', 'N/A')
+        desig = row.get('Designation', 'Team Member')
+        phone = row.get('Phone', 'N/A')
+
+        print(f"🎉 {name} -க்கு பிறந்தநாள் Poster உருவாக்கப்படுகிறது...")
+        poster_file = create_birthday_poster_image(name, emp_id, desig)
         
         caption = (
             f"🎉 *TODAY'S BIRTHDAY ALERT!* 🎉\n\n"
-            f"👤 *Name:* {row['Name']}\n"
-            f"🆔 *Emp ID:* {row['EmpID']}\n"
-            f"💼 *Role:* {row['Designation']}\n"
-            f"📞 *Phone:* {row['Phone']}"
+            f"👤 *Name:* {name}\n"
+            f"🆔 *Emp ID:* {emp_id}\n"
+            f"💼 *Role:* {desig}\n"
+            f"📞 *Phone:* {phone}"
         )
         
         try:
             res = send_whatsapp_media(poster_file, caption)
             if res.status_code == 200:
-                print(f"✅ Success! {row['Name']} -ukku WhatsApp Poster anuppappadtadhu.")
+                print(f"✅ Success! {name} -க்கு WhatsApp Poster அனுப்பப்பட்டது.")
             else:
                 print(f"❌ Failed Status ({res.status_code}): {res.text}")
         except Exception as e:
